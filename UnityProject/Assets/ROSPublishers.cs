@@ -19,7 +19,7 @@ public class RosPublishers : MonoBehaviour
     public string demonstrationIndicatorTopic = "/demonstration_indicator";
     public float publishFrequency = 1.0f / 60.0f;
     public InputActionAsset inputActions;
-
+    
     public GameObject rightController;
     public GameObject leftController;
 
@@ -38,6 +38,9 @@ public class RosPublishers : MonoBehaviour
     private Pose _currentDiffTransformLeft;
     private Pose _tmpTransformInverted;
     private Pose _tmpTransform;
+    
+    private AudioSource _startDemoAudioData;
+    private AudioSource _stopDemoAudioData;
 
     private void DoTransform(Pose transformLhs, Pose transformRhs, out Pose newTransform)
     {
@@ -99,6 +102,9 @@ public class RosPublishers : MonoBehaviour
 
         _currentDiffTransformRight.rotation.Set(0, 0, 0, 1.0f);
         _currentDiffTransformLeft.rotation.Set(0, 0, 0, 1.0f);
+        
+        _startDemoAudioData = GetComponents<AudioSource>()[0];
+        _stopDemoAudioData = GetComponents<AudioSource>()[1];
     }
 
 
@@ -151,6 +157,7 @@ public class RosPublishers : MonoBehaviour
 
         if (_startDemoAction.WasPressedThisFrame())
         {
+            _startDemoAudioData.Play(0);
             var msg = new StringMsg()
             {
                 data = "Starting demonstration"
@@ -160,6 +167,7 @@ public class RosPublishers : MonoBehaviour
 
         if (_stopDemoAction.WasPressedThisFrame())
         {
+            _stopDemoAudioData.Play(0);
             var msg = new StringMsg()
             {
                 data = "Stopping demonstration"

@@ -1,0 +1,34 @@
+{
+    "name": "DataCollectionActions",
+    "maps": [
+        {
+            "name": "DataCollection",
+            "id": "24e18fe0-84ad-4f92-b17e-908142907d00",
+            "actions": [
+                {
+                    "name": "Clutch",
+                    "type": "Button",
+                    "id": "68d2fb5e-8b55-4cf6-aa50-88867c4d552c",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                }
+            ],
+            "bindings": [
+                {
+                    "name": "",
+                    "id": "ed3b2110-e141-4123-bb37-3e9207e0740f",
+                    "path": "<XRController>{RightHand}/{GripButton}",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Clutch",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                }
+            ]
+        }
+    ],
+    "controlSchemes": []
+}

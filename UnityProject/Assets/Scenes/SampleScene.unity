@@ -565,7 +565,7 @@ GameObject:
   - component: {fileID: 1765857562}
   - component: {fileID: 1765857564}
   m_Layer: 0
-  m_Name: ROSRCPConnector
+  m_Name: ROSTCPConnector
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -620,7 +620,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9bc4be099d22431486049e97ccd1bbff, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  ros: {fileID: 0}
+  ros: {fileID: 1765857562}
   topicName: /right_controller_odom
   childFrame: right_controller_odom
   tfTopicName: /tf
@@ -1166,7 +1166,7 @@ PrefabInstance:
     - target: {fileID: 4504524130642332244, guid: 77e7c27b2c5525e4aa8cc9f99d654486, type: 3}
       propertyPath: 'm_ActionAssets.Array.data[0]'
       value: 
-      objectReference: {fileID: -944628639613478452, guid: c348712bda248c246b8c49b3db54643f, type: 3}
+      objectReference: {fileID: -944628639613478452, guid: 0fd4ebd5ebc5a9d218c576ea0e139fa0, type: 3}
     - target: {fileID: 7434851320941268098, guid: 77e7c27b2c5525e4aa8cc9f99d654486, type: 3}
       propertyPath: m_AnchorMax.y
       value: 1

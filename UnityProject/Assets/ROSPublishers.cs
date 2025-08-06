@@ -1,5 +1,4 @@
-using System.Runtime.CompilerServices;
-using NUnit.Framework.Constraints;
+using System;
 using RosMessageTypes.BuiltinInterfaces;
 using RosMessageTypes.Geometry;
 using RosMessageTypes.Nav;
@@ -8,10 +7,9 @@ using RosMessageTypes.Tf2;
 using UnityEngine;
 using Unity.Robotics.ROSTCPConnector;
 using Unity.Robotics.ROSTCPConnector.ROSGeometry;
-using Unity.XR.CoreUtils;
 using UnityEngine.InputSystem;
 
-public class OdomPublisher : MonoBehaviour
+public class RosPublishers : MonoBehaviour
 {
     public ROSConnection ros;
     public string topicName = "/right_controller_odom";
@@ -19,7 +17,7 @@ public class OdomPublisher : MonoBehaviour
     public string tfTopicName = "/tf";
     public string gripperButtonTopicName = "/gripper_button";
     public string demonstrationIndicatorTopic = "/demonstration_indicator";
-    public float publishFrequency = 0.04f;
+    public float publishFrequency = 1.0f / 60.0f;
     public InputActionAsset inputActions;
 
     public GameObject rightController;
@@ -130,20 +128,14 @@ public class OdomPublisher : MonoBehaviour
                 ref _tmpTransform);
             _currentTransformRight.position = _tmpTransform.position;
             _currentTransformRight.rotation = _tmpTransform.rotation;
-
             _currentDiffTransformRight.position.Set(0, 0, 0);
             _currentDiffTransformRight.rotation.Set(0, 0, 0, 1.0f);
-
-            // DoTransformDiff(_currentTransformLeft, _currentDiffTransformLeft, _clutchTransformLeft,
-            //     ref _currentTransformLeft);
-            // _currentDiffTransformLeft.position.Set(0, 0, 0);
-            // _currentDiffTransformLeft.rotation.Set(0, 0, 0, 1.0f);
         }
 
         _timeElapsed += Time.deltaTime;
         if (_timeElapsed > publishFrequency)
         {
-            PublishTf();
+            PublishOdomAndTf();
             _timeElapsed = 0;
         }
 
@@ -156,7 +148,7 @@ public class OdomPublisher : MonoBehaviour
             _grippedState = !_grippedState;
             ros.Publish(gripperButtonTopicName, msg);
         }
-        
+
         if (_startDemoAction.WasPressedThisFrame())
         {
             var msg = new StringMsg()
@@ -165,7 +157,7 @@ public class OdomPublisher : MonoBehaviour
             };
             ros.Publish(demonstrationIndicatorTopic, msg);
         }
-        
+
         if (_stopDemoAction.WasPressedThisFrame())
         {
             var msg = new StringMsg()
@@ -174,10 +166,22 @@ public class OdomPublisher : MonoBehaviour
             };
             ros.Publish(demonstrationIndicatorTopic, msg);
         }
-        
     }
 
-    private void PublishTf()
+    private static TimeMsg GetRosTime()
+    {
+        DateTime unixEpoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        DateTime now = DateTime.UtcNow;
+
+        TimeSpan timeSinceEpoch = now - unixEpoch;
+        return new TimeMsg
+        {
+            sec = (int)timeSinceEpoch.TotalSeconds,
+            nanosec = (uint)((Time.time - Mathf.Floor(Time.time)) * 1e9)
+        };
+    }
+
+    private void PublishOdomAndTf()
     {
         // Convert position and rotation using ROSGeometry
         DoTransformDiff(_currentTransformRight, _currentDiffTransformRight, _clutchTransformRight, ref _tmpTransform);
@@ -188,14 +192,9 @@ public class OdomPublisher : MonoBehaviour
         HeaderMsg header = new HeaderMsg
         {
             frame_id = "world",
-            stamp = new TimeMsg
-            {
-                sec = (int)Time.time,
-                nanosec = (uint)((Time.time - Mathf.Floor(Time.time)) * 1e9)
-            }
+            stamp = GetRosTime()
         };
-
-
+        
         var pose = new PoseWithCovarianceMsg
         {
             pose = new PoseMsg

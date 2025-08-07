@@ -19,7 +19,7 @@ public class RosPublishers : MonoBehaviour
     public string demonstrationIndicatorTopic = "/demonstration_indicator";
     public float publishFrequency = 1.0f / 60.0f;
     public InputActionAsset inputActions;
-    
+
     public GameObject rightController;
     public GameObject leftController;
 
@@ -38,7 +38,7 @@ public class RosPublishers : MonoBehaviour
     private Pose _currentDiffTransformLeft;
     private Pose _tmpTransformInverted;
     private Pose _tmpTransform;
-    
+
     private AudioSource _startDemoAudioData;
     private AudioSource _stopDemoAudioData;
 
@@ -77,6 +77,7 @@ public class RosPublishers : MonoBehaviour
         ros = ROSConnection.GetOrCreateInstance();
         ros.RegisterPublisher<OdometryMsg>(topicName);
         ros.RegisterPublisher<TFMessageMsg>(tfTopicName);
+        ros.RegisterPublisher<TFMessageMsg>("/tf_test");
         ros.RegisterPublisher<BoolMsg>(gripperButtonTopicName);
         ros.RegisterPublisher<StringMsg>(demonstrationIndicatorTopic);
 
@@ -102,7 +103,7 @@ public class RosPublishers : MonoBehaviour
 
         _currentDiffTransformRight.rotation.Set(0, 0, 0, 1.0f);
         _currentDiffTransformLeft.rotation.Set(0, 0, 0, 1.0f);
-        
+
         _startDemoAudioData = GetComponents<AudioSource>()[0];
         _stopDemoAudioData = GetComponents<AudioSource>()[1];
     }
@@ -182,10 +183,12 @@ public class RosPublishers : MonoBehaviour
         DateTime now = DateTime.UtcNow;
 
         TimeSpan timeSinceEpoch = now - unixEpoch;
+        long totalTicks = timeSinceEpoch.Ticks;
+        long totalNanoseconds = totalTicks * 100;
         return new TimeMsg
         {
-            sec = (int)timeSinceEpoch.TotalSeconds,
-            nanosec = (uint)((Time.time - Mathf.Floor(Time.time)) * 1e9)
+            sec = (int)(totalNanoseconds / 1_000_000_000),
+            nanosec = (uint)(totalNanoseconds % 1_000_000_000)
         };
     }
 
@@ -202,7 +205,7 @@ public class RosPublishers : MonoBehaviour
             frame_id = "world",
             stamp = GetRosTime()
         };
-        
+
         var pose = new PoseWithCovarianceMsg
         {
             pose = new PoseMsg
@@ -253,5 +256,6 @@ public class RosPublishers : MonoBehaviour
 
         // Publish the message
         ros.Publish(tfTopicName, tfMessage);
+        ros.Publish("/tf_test", tfMessage);
     }
 }

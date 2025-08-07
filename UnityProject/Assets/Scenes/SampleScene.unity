@@ -628,7 +628,7 @@ MonoBehaviour:
   tfTopicName: /tf
   gripperButtonTopicName: /gripper_button
   demonstrationIndicatorTopic: /demonstration_indicator
-  publishFrequency: 0.01666667
+  publishFrequency: 0.016666668
   inputActions: {fileID: -944628639613478452, guid: 6a4a78f4b182413e89b8b9cdd3e748d4, type: 3}
   rightController: {fileID: 821107281}
   leftController: {fileID: 581284854}

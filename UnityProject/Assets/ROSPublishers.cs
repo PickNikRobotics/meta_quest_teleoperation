@@ -29,6 +29,7 @@ public class RosPublishers : MonoBehaviour
     private InputAction _gripperAction;
     private InputAction _startDemoAction;
     private InputAction _stopDemoAction;
+    private InputAction _keyboardAction;
     private bool _grippedState;
 
     private Pose _clutchTransformRight;
@@ -90,7 +91,9 @@ public class RosPublishers : MonoBehaviour
         _startDemoAction = inputActions.FindAction("StartDemo");
         _startDemoAction.Enable();
         _stopDemoAction = inputActions.FindAction("StopDemo");
-        _stopDemoAction.Enable();
+        _stopDemoAction.Enable();        
+        _keyboardAction = inputActions.FindAction("OpenKeyboard");
+        _keyboardAction.Enable();
         _currentTransformRight = new Pose();
         _currentTransformLeft = new Pose();
         _clutchTransformRight = new Pose();
@@ -116,6 +119,13 @@ public class RosPublishers : MonoBehaviour
 
     public void Update()
     {
+        if (_keyboardAction.WasPressedThisFrame())
+        {
+            TouchScreenKeyboard.hideInput = false;
+            _keyboard = TouchScreenKeyboard.Open("",
+                TouchScreenKeyboardType.NumbersAndPunctuation, false, false, false, false);
+        }
+        
         if (!ros.RosIPAddress.Equals(textInput.text))
         {
             ros.Disconnect();
@@ -170,10 +180,6 @@ public class RosPublishers : MonoBehaviour
 
         if (_startDemoAction.WasPressedThisFrame())
         {
-            TouchScreenKeyboard.hideInput = false;
-            _keyboard = TouchScreenKeyboard.Open("",
-                TouchScreenKeyboardType.NumbersAndPunctuation, false, false, false, false);
-
             _startDemoAudioData.Play(0);
             var msg = new StringMsg()
             {

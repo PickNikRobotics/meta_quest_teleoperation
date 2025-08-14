@@ -4,6 +4,7 @@ using RosMessageTypes.Geometry;
 using RosMessageTypes.Nav;
 using RosMessageTypes.Std;
 using RosMessageTypes.Tf2;
+using TMPro;
 using UnityEngine;
 using Unity.Robotics.ROSTCPConnector;
 using Unity.Robotics.ROSTCPConnector.ROSGeometry;
@@ -42,18 +43,17 @@ public class RosPublishers : MonoBehaviour
     private AudioSource _startDemoAudioData;
     private AudioSource _stopDemoAudioData;
 
+    private TouchScreenKeyboard _keyboard;
+    public TextMeshProUGUI textInput;
+
     private void DoTransform(Pose transformLhs, Pose transformRhs, out Pose newTransform)
     {
-        // newTransform.position = transformLhs.position + transformLhs.rotation * transformRhs.position;
-        // newTransform.rotation = transformLhs.rotation * transformRhs.rotation;
         newTransform = transformRhs.GetTransformedBy(transformLhs);
     }
 
     private void DoTransformDiff(Pose transformCurrent, Pose transformDiff, Pose transformClutchIn,
         ref Pose newTransform)
     {
-        // transformDiff.rotation = transformClutchIn.rotation * transformDiff.rotation *
-        //                          Quaternion.Inverse(transformClutchIn.rotation);
         newTransform.rotation = (transformClutchIn.rotation * transformDiff.rotation *
                                  Quaternion.Inverse(transformClutchIn.rotation)) * transformCurrent.rotation;
         newTransform.position = transformCurrent.position +
@@ -75,12 +75,14 @@ public class RosPublishers : MonoBehaviour
     public void Start()
     {
         ros = ROSConnection.GetOrCreateInstance();
+        ros.Disconnect();
+        ros.Connect(PlayerPrefs.GetString("RosIPAddress", "127.0.0.1"), 10000);
         ros.RegisterPublisher<OdometryMsg>(topicName);
         ros.RegisterPublisher<TFMessageMsg>(tfTopicName);
         ros.RegisterPublisher<TFMessageMsg>("/tf_test");
         ros.RegisterPublisher<BoolMsg>(gripperButtonTopicName);
         ros.RegisterPublisher<StringMsg>(demonstrationIndicatorTopic);
-
+        
         _clutchAction = inputActions.FindAction("Clutch");
         _clutchAction.Enable(); // Required before reading input
         _gripperAction = inputActions.FindAction("Gripper");
@@ -106,11 +108,21 @@ public class RosPublishers : MonoBehaviour
 
         _startDemoAudioData = GetComponents<AudioSource>()[0];
         _stopDemoAudioData = GetComponents<AudioSource>()[1];
+
+        textInput = GameObject.Find("Text").GetComponent<TextMeshProUGUI>();
+        textInput.text = ros.RosIPAddress;
     }
 
 
     public void Update()
     {
+        if (!ros.RosIPAddress.Equals(textInput.text))
+        {
+            ros.Disconnect();
+            ros.Connect(textInput.text, 10000);
+            PlayerPrefs.SetString("RosIPAddress", ros.RosIPAddress);
+        }
+
         if (_clutchAction.WasPressedThisFrame())
         {
             SetPoseFromTransform(rightController.transform, ref _clutchTransformRight);
@@ -158,6 +170,10 @@ public class RosPublishers : MonoBehaviour
 
         if (_startDemoAction.WasPressedThisFrame())
         {
+            TouchScreenKeyboard.hideInput = false;
+            _keyboard = TouchScreenKeyboard.Open("",
+                TouchScreenKeyboardType.NumbersAndPunctuation, false, false, false, false);
+
             _startDemoAudioData.Play(0);
             var msg = new StringMsg()
             {
@@ -174,6 +190,14 @@ public class RosPublishers : MonoBehaviour
                 data = "Stopping demonstration"
             };
             ros.Publish(demonstrationIndicatorTopic, msg);
+        }
+    }
+    
+    void OnGUI()
+    {
+        if (_keyboard != null)
+        {
+            textInput.text = _keyboard.text;
         }
     }
 

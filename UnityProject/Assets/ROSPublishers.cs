@@ -46,8 +46,8 @@ public class RosPublishers : MonoBehaviour
     public string rightMenuButtonStateTopicName = "/right_menu_button_state";
     public InputActionAsset inputActions;
 
-    public GameObject rightController;
     public GameObject leftController;
+    public GameObject rightController;
 
     private float _timeElapsed;
     private InputAction _startDemoAction;
@@ -308,8 +308,8 @@ public class RosPublishers : MonoBehaviour
         {
             _timeElapsed = 0;
 
-            PublishOdomAndTf(leftController.transform, leftOdomTopicName, leftChildFrame);
-            PublishOdomAndTf(rightController.transform, rightOdomTopicName, rightChildFrame);
+            PublishOdomAndTf(leftController.transform, leftChildFrame, leftOdomTopicName);
+            PublishOdomAndTf(rightController.transform, rightChildFrame, rightOdomTopicName);
 
             ros.Publish(leftGripButtonStateTopicName, new BoolMsg(_leftGripAction.IsPressed()));
             ros.Publish(leftTriggerButtonStateTopicName, new BoolMsg(_leftTriggerAction.IsPressed()));
@@ -369,7 +369,7 @@ public class RosPublishers : MonoBehaviour
         // Create header
         HeaderMsg header = new HeaderMsg
         {
-            frame_id = "world",
+            frame_id = "quest",
             stamp = GetRosTime()
         };
 
@@ -413,7 +413,7 @@ public class RosPublishers : MonoBehaviour
         var transformStamped = new TransformStampedMsg
         {
             header = header,
-            child_frame_id = rightChildFrame,
+            child_frame_id = childFrame,
             transform = transformMsg
         };
 

@@ -6,24 +6,6 @@
             "id": "24e18fe0-84ad-4f92-b17e-908142907d00",
             "actions": [
                 {
-                    "name": "Clutch",
-                    "type": "Button",
-                    "id": "68d2fb5e-8b55-4cf6-aa50-88867c4d552c",
-                    "expectedControlType": "",
-                    "processors": "",
-                    "interactions": "",
-                    "initialStateCheck": false
-                },
-                {
-                    "name": "Gripper",
-                    "type": "Button",
-                    "id": "b531c495-0568-4376-9541-3d8d277d7519",
-                    "expectedControlType": "",
-                    "processors": "",
-                    "interactions": "",
-                    "initialStateCheck": false
-                },
-                {
                     "name": "StartDemo",
                     "type": "Button",
                     "id": "9614a7c8-718f-4ed9-a36a-e9c7e0f79e41",
@@ -49,31 +31,99 @@
                     "processors": "",
                     "interactions": "",
                     "initialStateCheck": false
+                },
+                {
+                    "name": "RightGrip",
+                    "type": "Button",
+                    "id": "308983f1-d048-47ec-9829-cad73bf99647",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                },
+                {
+                    "name": "RightTrigger",
+                    "type": "Button",
+                    "id": "b531c495-0568-4376-9541-3d8d277d7519",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                },
+                {
+                    "name": "RightA",
+                    "type": "Button",
+                    "id": "dc85ddd3-c161-4e43-a6c4-95d5dfdda78a",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                },
+                {
+                    "name": "RightB",
+                    "type": "Button",
+                    "id": "d40f9075-aac4-4c82-9b91-9d5236776423",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                },
+                {
+                    "name": "RightMenu",
+                    "type": "Button",
+                    "id": "5aa6324c-cb47-4f9a-8923-f18bed7962a4",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                },
+                {
+                    "name": "LeftGrip",
+                    "type": "Button",
+                    "id": "408444e9-014f-416c-89a3-723a2c528977",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                },
+                {
+                    "name": "LeftTrigger",
+                    "type": "Button",
+                    "id": "f165976b-bff3-4366-87f2-7eda581eb3a0",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                },
+                {
+                    "name": "LeftA",
+                    "type": "Button",
+                    "id": "7eea024c-2901-4e8a-aed7-bb73ef3b308b",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                },
+                {
+                    "name": "LeftB",
+                    "type": "Button",
+                    "id": "ec1a0d5e-6393-41b6-af6e-c6d3370d0e80",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                },
+                {
+                    "name": "LeftMenu",
+                    "type": "Button",
+                    "id": "1e323e74-3449-4c82-b047-39517e2a1b26",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
                 }
             ],
             "bindings": [
-                {
-                    "name": "",
-                    "id": "ed3b2110-e141-4123-bb37-3e9207e0740f",
-                    "path": "<XRController>{RightHand}/{GripButton}",
-                    "interactions": "",
-                    "processors": "",
-                    "groups": "",
-                    "action": "Clutch",
-                    "isComposite": false,
-                    "isPartOfComposite": false
-                },
-                {
-                    "name": "",
-                    "id": "f717fcc2-482b-4a50-8a22-246808b730a8",
-                    "path": "<XRController>{RightHand}/{TriggerButton}",
-                    "interactions": "",
-                    "processors": "",
-                    "groups": "",
-                    "action": "Gripper",
-                    "isComposite": false,
-                    "isPartOfComposite": false
-                },
                 {
                     "name": "",
                     "id": "0fc20d83-c8f2-4ed5-9ed3-2e9e2f1f53b3",
@@ -104,6 +154,116 @@
                     "processors": "",
                     "groups": "",
                     "action": "OpenKeyboard",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "35656222-3a91-4073-8378-de69b3ce0acb",
+                    "path": "<XRController>{RightHand}/{GripButton}",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "RightGrip",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "f717fcc2-482b-4a50-8a22-246808b730a8",
+                    "path": "<XRController>{RightHand}/{TriggerButton}",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "RightTrigger",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "61d3c8ca-f053-4467-a6ff-f9f5fa8279a9",
+                    "path": "<XRController>{RightHand}/{PrimaryButton}",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "RightA",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "66efb9bd-8e48-49f5-8b8a-0a940103da95",
+                    "path": "<XRController>{RightHand}/{SecondaryButton}",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "RightB",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "6b4a1dca-8a7a-47df-9fef-a522e441ab29",
+                    "path": "<XRController>{RightHand}/{MenuButton}",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "RightMenu",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "f37cd10f-fe89-447d-82b6-e15b9b7425a2",
+                    "path": "<XRController>{LeftHand}/{GripButton}",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "LeftGrip",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "ea5c22aa-b2fb-4ed8-9b5b-144a212e0123",
+                    "path": "<XRController>{LeftHand}/{TriggerButton}",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "LeftTrigger",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "e83d24a8-afa0-4644-af4b-da3d05c339db",
+                    "path": "<XRController>{LeftHand}/{PrimaryButton}",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "LeftA",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "58e0f7b5-1e1e-4a90-97ce-509f4b5bf40b",
+                    "path": "<XRController>{LeftHand}/{SecondaryButton}",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "LeftB",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "3634d056-ce36-4f2e-918b-a844b11fc3c9",
+                    "path": "<XRController>{LeftHand}/{MenuButton}",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "LeftMenu",
                     "isComposite": false,
                     "isPartOfComposite": false
                 }

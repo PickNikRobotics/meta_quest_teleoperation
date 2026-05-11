@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using RosMessageTypes.BuiltinInterfaces;
 using RosMessageTypes.Geometry;
 using RosMessageTypes.Nav;
@@ -13,8 +14,9 @@ using UnityEngine.InputSystem;
 public class RosPublishers : MonoBehaviour
 {
     public ROSConnection ros;
-    // Event updates: Publish "WasPressedThisFrame()" button updates the frame they are detected
-    public string demonstrationIndicatorTopic = "/demonstration_indicator";
+    // Event updates: Publish "WasPressedThisFrame()" button updates the frame they are detected.
+    // /demonstration_indicator is published from the host-side behavior tree off the Right A / Right B
+    // button events — this app only emits the raw button events and plays the local audio cues.
     public string leftGripButtonEventTopicName = "/left_grip_button_event";
     public string leftTriggerButtonEventTopicName = "/left_trigger_button_event";
     // x
@@ -63,16 +65,34 @@ public class RosPublishers : MonoBehaviour
     private InputAction _rightAAction;
     private InputAction _rightBAction;
     private InputAction _rightMenuAction;
-    private bool _grippedState;
+    // Registration gate: ros_tcp_endpoint has no registration ACK, so RegisterPublisher
+    // commands race against subsequent Publish commands over separate TCP connections.
+    // We block all Publish calls in Update() until this flag flips, giving the endpoint
+    // time to process every RegisterPublisher. Reset on every (re)connect.
+    private bool _registered;
+    private Coroutine _registrationGateCoroutine;
+    private const float kRegistrationDelaySeconds = 2.0f;
 
-    private Pose _clutchTransformRight;
-    private Pose _clutchTransformLeft;
-    private Pose _currentTransformRight;
-    private Pose _currentTransformLeft;
-    private Pose _currentDiffTransformRight;
-    private Pose _currentDiffTransformLeft;
-    private Pose _tmpTransformInverted;
-    private Pose _tmpTransform;
+    // Reusable message instances for the 60 Hz publish path. Allocating fresh OdometryMsg /
+    // PoseMsg / TFMessageMsg trees on every frame creates ~7,200 GC events/sec across both
+    // controllers. We instantiate once and mutate in place; ros_tcp_endpoint serializes
+    // synchronously inside Publish(), so reuse is safe.
+    private HeaderMsg _odomHeader;
+    private PointMsg _odomPosePoint;
+    private QuaternionMsg _odomPoseQuat;
+    private PoseMsg _odomPose;
+    private PoseWithCovarianceMsg _odomPoseWithCov;
+    private Vector3Msg _odomTwistLinear;
+    private Vector3Msg _odomTwistAngular;
+    private TwistMsg _odomTwist;
+    private TwistWithCovarianceMsg _odomTwistWithCov;
+    private OdometryMsg _odomMsg;
+    private Vector3Msg _tfTranslation;
+    private QuaternionMsg _tfRotation;
+    private TransformMsg _tfTransform;
+    private TransformStampedMsg _tfStamped;
+    private TransformStampedMsg[] _tfArray;
+    private TFMessageMsg _tfMessage;
 
     private AudioSource _startDemoAudioData;
     private AudioSource _stopDemoAudioData;
@@ -80,40 +100,41 @@ public class RosPublishers : MonoBehaviour
     private TouchScreenKeyboard _keyboard;
     public TextMeshProUGUI textInput;
 
-    private void DoTransform(Pose transformLhs, Pose transformRhs, out Pose newTransform)
+    private void InitializeReusableMessages()
     {
-        newTransform = transformRhs.GetTransformedBy(transformLhs);
+        _odomHeader = new HeaderMsg { frame_id = "quest" };
+        _odomPosePoint = new PointMsg();
+        _odomPoseQuat = new QuaternionMsg();
+        _odomPose = new PoseMsg { position = _odomPosePoint, orientation = _odomPoseQuat };
+        _odomPoseWithCov = new PoseWithCovarianceMsg { pose = _odomPose };
+        _odomTwistLinear = new Vector3Msg(0, 0, 0);
+        _odomTwistAngular = new Vector3Msg(0, 0, 0);
+        _odomTwist = new TwistMsg { linear = _odomTwistLinear, angular = _odomTwistAngular };
+        _odomTwistWithCov = new TwistWithCovarianceMsg { twist = _odomTwist };
+        _odomMsg = new OdometryMsg
+        {
+            header = _odomHeader,
+            pose = _odomPoseWithCov,
+            twist = _odomTwistWithCov
+        };
+
+        _tfTranslation = new Vector3Msg();
+        _tfRotation = new QuaternionMsg();
+        _tfTransform = new TransformMsg { translation = _tfTranslation, rotation = _tfRotation };
+        _tfStamped = new TransformStampedMsg { header = _odomHeader, transform = _tfTransform };
+        _tfArray = new TransformStampedMsg[1] { _tfStamped };
+        _tfMessage = new TFMessageMsg(_tfArray);
     }
 
-    private void DoTransformDiff(Pose transformCurrent, Pose transformDiff, Pose transformClutchIn,
-        ref Pose newTransform)
+    private void RegisterAllPublishers()
     {
-        newTransform.rotation = (transformClutchIn.rotation * transformDiff.rotation *
-                                 Quaternion.Inverse(transformClutchIn.rotation)) * transformCurrent.rotation;
-        newTransform.position = transformCurrent.position +
-                                transformClutchIn.rotation * transformDiff.position;
-    }
-
-    private void InvertTransform(Pose transformBase, ref Pose newTransform)
-    {
-        newTransform.rotation = Quaternion.Inverse(transformBase.rotation);
-        newTransform.position = -(newTransform.rotation * transformBase.position);
-    }
-
-    private void SetPoseFromTransform(Transform transformValue, ref Pose pose)
-    {
-        transformValue.GetPositionAndRotation(out pose.position, out pose.rotation);
-    }
-
-
-    public void Start()
-    {
-        ros = ROSConnection.GetOrCreateInstance();
-        ros.Disconnect();
-        ros.Connect(PlayerPrefs.GetString("RosIPAddress", "127.0.0.1"), 10000);
+        // QoS policy: publishers are RELIABLE (the ROS-TCP-Connector default). Subscribers
+        // are free to opt into BEST_EFFORT for low-latency consumption — ROS 2 QoS
+        // compatibility rules allow a BEST_EFFORT subscriber to connect to a RELIABLE
+        // publisher (the connection downgrades), so this default leaves the choice to the
+        // host side without losing reliable delivery for subscribers that want it.
 
         // Event updates
-        ros.RegisterPublisher<StringMsg>(demonstrationIndicatorTopic);
         ros.RegisterPublisher<EmptyMsg>(leftGripButtonEventTopicName);
         ros.RegisterPublisher<EmptyMsg>(leftTriggerButtonEventTopicName);
         ros.RegisterPublisher<EmptyMsg>(leftAButtonEventTopicName);
@@ -127,7 +148,6 @@ public class RosPublishers : MonoBehaviour
 
         // State updates
         ros.RegisterPublisher<TFMessageMsg>(tfTopicName);
-        ros.RegisterPublisher<TFMessageMsg>("/tf_test");
         ros.RegisterPublisher<OdometryMsg>(leftOdomTopicName);
         ros.RegisterPublisher<BoolMsg>(leftGripButtonStateTopicName);
         ros.RegisterPublisher<BoolMsg>(leftTriggerButtonStateTopicName);
@@ -141,196 +161,204 @@ public class RosPublishers : MonoBehaviour
         ros.RegisterPublisher<BoolMsg>(rightAButtonStateTopicName);
         ros.RegisterPublisher<BoolMsg>(rightBButtonStateTopicName);
         ros.RegisterPublisher<BoolMsg>(rightMenuButtonStateTopicName);
-        
-        // If not using this for MoveIt Pro's diffusion training pipeline, do not enable the StartDemo and StopDemo actions
-        _startDemoAction = inputActions.FindAction("StartDemo");
-        _startDemoAction.Enable();
-        _stopDemoAction = inputActions.FindAction("StopDemo");
-        _stopDemoAction.Enable();
-        //
-        _keyboardAction = inputActions.FindAction("OpenKeyboard");
-        _keyboardAction.Enable();
-        _leftGripAction = inputActions.FindAction("LeftGrip");
-        _leftGripAction.Enable();
-        _leftTriggerAction = inputActions.FindAction("LeftTrigger");
-        _leftTriggerAction.Enable();
-        _leftAAction = inputActions.FindAction("LeftA");
-        _leftAAction.Enable();
-        _leftBAction = inputActions.FindAction("LeftB");
-        _leftBAction.Enable();
-        _leftMenuAction = inputActions.FindAction("LeftMenu");
-        _leftMenuAction.Enable();
-        _rightGripAction = inputActions.FindAction("RightGrip");
-        _rightGripAction.Enable();
-        _rightTriggerAction = inputActions.FindAction("RightTrigger");
-        _rightTriggerAction.Enable();
-        _rightAAction = inputActions.FindAction("RightA");
-        _rightAAction.Enable();
-        _rightBAction = inputActions.FindAction("RightB");
-        _rightBAction.Enable();
-        _rightMenuAction = inputActions.FindAction("RightMenu");
-        _rightMenuAction.Enable();
+    }
 
+    private void ConnectAndRegister(string ipAddress)
+    {
+        ros.Disconnect();
+        ros.Connect(ipAddress, 10000);
+        RegisterAllPublishers();
 
-        // _currentTransformRight = new Pose();
-        // _currentTransformLeft = new Pose();
-        // _clutchTransformRight = new Pose();
-        // _clutchTransformLeft = new Pose();
-        // _currentDiffTransformRight = new Pose();
-        // _currentDiffTransformLeft = new Pose();
-        // _tmpTransformInverted = new Pose();
-        // _tmpTransform = new Pose();
+        // Block publishes until the endpoint has had time to process every
+        // RegisterPublisher. Coroutine flips _registered to true after the delay.
+        _registered = false;
+        if (_registrationGateCoroutine != null)
+        {
+            StopCoroutine(_registrationGateCoroutine);
+        }
+        _registrationGateCoroutine = StartCoroutine(MarkRegisteredAfterDelay());
+    }
 
-        // SetPoseFromTransform(rightController.transform, ref _currentTransformRight);
-        // SetPoseFromTransform(leftController.transform, ref _currentTransformLeft);
+    private IEnumerator MarkRegisteredAfterDelay()
+    {
+        yield return new WaitForSeconds(kRegistrationDelaySeconds);
+        _registered = true;
+    }
 
-        // _currentDiffTransformRight.rotation.Set(0, 0, 0, 1.0f);
-        // _currentDiffTransformLeft.rotation.Set(0, 0, 0, 1.0f);
+    private InputAction FindAndEnableAction(string actionName)
+    {
+        InputAction action = inputActions.FindAction(actionName);
+        if (action == null)
+        {
+            Debug.LogError($"RosPublishers: InputAction '{actionName}' not found in {nameof(inputActions)}.");
+            return null;
+        }
+        action.Enable();
+        return action;
+    }
 
-        _startDemoAudioData = GetComponents<AudioSource>()[0];
-        _stopDemoAudioData = GetComponents<AudioSource>()[1];
+    public void Start()
+    {
+        InitializeReusableMessages();
 
-        textInput = GameObject.Find("Text").GetComponent<TextMeshProUGUI>();
-        textInput.text = ros.RosIPAddress;
+        ros = ROSConnection.GetOrCreateInstance();
+        // Only attempt to connect when the user has saved an IP from a prior session.
+        // Skipping ConnectAndRegister on first launch avoids burning the registration
+        // gate against an unreachable host and keeps the scene's "Enter ROS PC IP"
+        // placeholder text visible until the user opens the keyboard.
+        if (PlayerPrefs.HasKey("RosIPAddress"))
+        {
+            ConnectAndRegister(PlayerPrefs.GetString("RosIPAddress"));
+        }
+
+        // If not using this for MoveIt Pro's diffusion training pipeline, do not enable the StartDemo and StopDemo actions.
+        _startDemoAction = FindAndEnableAction("StartDemo");
+        _stopDemoAction = FindAndEnableAction("StopDemo");
+
+        _keyboardAction = FindAndEnableAction("OpenKeyboard");
+        _leftGripAction = FindAndEnableAction("LeftGrip");
+        _leftTriggerAction = FindAndEnableAction("LeftTrigger");
+        _leftAAction = FindAndEnableAction("LeftA");
+        _leftBAction = FindAndEnableAction("LeftB");
+        _leftMenuAction = FindAndEnableAction("LeftMenu");
+        _rightGripAction = FindAndEnableAction("RightGrip");
+        _rightTriggerAction = FindAndEnableAction("RightTrigger");
+        _rightAAction = FindAndEnableAction("RightA");
+        _rightBAction = FindAndEnableAction("RightB");
+        _rightMenuAction = FindAndEnableAction("RightMenu");
+
+        AudioSource[] audioSources = GetComponents<AudioSource>();
+        if (audioSources.Length >= 2)
+        {
+            _startDemoAudioData = audioSources[0];
+            _stopDemoAudioData = audioSources[1];
+        }
+        else
+        {
+            Debug.LogError($"RosPublishers: expected at least 2 AudioSource components on this GameObject, found {audioSources.Length}. Demo start/stop sounds disabled.");
+        }
+
+        GameObject textGameObject = GameObject.Find("Text");
+        if (textGameObject != null)
+        {
+            textInput = textGameObject.GetComponent<TextMeshProUGUI>();
+        }
+        if (textInput == null)
+        {
+            Debug.LogError("RosPublishers: GameObject 'Text' with TextMeshProUGUI component not found in scene. IP display disabled.");
+        }
+        else if (PlayerPrefs.HasKey("RosIPAddress"))
+        {
+            textInput.text = ros.RosIPAddress;
+        }
+        // else: leave the scene's placeholder text (e.g. "Enter ROS PC IP") alone.
     }
 
 
     public void Update()
     {
         //Event updates
-        if (_keyboardAction.WasPressedThisFrame())
+        if (_keyboardAction != null && _keyboardAction.WasPressedThisFrame())
         {
             TouchScreenKeyboard.hideInput = false;
             _keyboard = TouchScreenKeyboard.Open("",
                 TouchScreenKeyboardType.NumbersAndPunctuation, false, false, false, false);
         }
 
-        if (!ros.RosIPAddress.Equals(textInput.text))
+        // Only reconnect when the user finishes editing (keyboard closed via Done,
+        // LostFocus, or Canceled). Reconnecting per keystroke would tear down
+        // ros_tcp_endpoint registrations on every character typed.
+        if (_keyboard != null && textInput != null &&
+            (_keyboard.status == TouchScreenKeyboard.Status.Done ||
+             _keyboard.status == TouchScreenKeyboard.Status.LostFocus ||
+             _keyboard.status == TouchScreenKeyboard.Status.Canceled))
         {
-            ros.Disconnect();
-            ros.Connect(textInput.text, 10000);
-            PlayerPrefs.SetString("RosIPAddress", ros.RosIPAddress);
-        }
-
-        if (_startDemoAction.WasPressedThisFrame())
-        {
-            _startDemoAudioData.Play(0);
-            var msg = new StringMsg()
+            if (_keyboard.status == TouchScreenKeyboard.Status.Done &&
+                !string.IsNullOrEmpty(textInput.text) &&
+                !ros.RosIPAddress.Equals(textInput.text))
             {
-                data = "Starting demonstration"
-            };
-            ros.Publish(demonstrationIndicatorTopic, msg);
+                ConnectAndRegister(textInput.text);
+                PlayerPrefs.SetString("RosIPAddress", textInput.text);
+            }
+            _keyboard = null;
         }
 
-        if (_stopDemoAction.WasPressedThisFrame())
+        // Block publishes until ros_tcp_endpoint has had time to process every
+        // RegisterPublisher we sent in ConnectAndRegister. Without this, Publish
+        // commands race against RegisterPublisher commands over separate TCP
+        // connections and the endpoint logs "Not registered to publish topic 'X'".
+        if (!_registered)
         {
-            _stopDemoAudioData.Play(0);
-            var msg = new StringMsg()
-            {
-                data = "Stopping demonstration"
-            };
-            ros.Publish(demonstrationIndicatorTopic, msg);
+            return;
         }
 
-        if (_leftGripAction.WasPressedThisFrame())
+        // Audio-only cues for start/stop. The host-side BT listens to the Right A / Right B
+        // button events and publishes the matching string to /demonstration_indicator.
+        if (_startDemoAction != null && _startDemoAction.WasPressedThisFrame())
         {
-            ros.Publish(leftGripButtonEventTopicName, new EmptyMsg());
-        }
-        if (_leftTriggerAction.WasPressedThisFrame())
-        {
-            ros.Publish(leftTriggerButtonEventTopicName, new EmptyMsg());
-        }
-        if (_leftAAction.WasPressedThisFrame())
-        {
-            ros.Publish(leftAButtonEventTopicName, new EmptyMsg());
-        }
-        if (_leftBAction.WasPressedThisFrame())
-        {
-            ros.Publish(leftBButtonEventTopicName, new EmptyMsg());
-        }
-        if (_leftMenuAction.WasPressedThisFrame())
-        {
-            ros.Publish(leftMenuButtonEventTopicName, new EmptyMsg());
-        }
-        if (_rightGripAction.WasPressedThisFrame())
-        {
-            ros.Publish(rightGripButtonEventTopicName, new EmptyMsg());
-        }
-        if (_rightTriggerAction.WasPressedThisFrame())
-        {
-            ros.Publish(rightTriggerButtonEventTopicName, new EmptyMsg());
-        }
-        if (_rightAAction.WasPressedThisFrame())
-        {
-            ros.Publish(rightAButtonEventTopicName, new EmptyMsg());
-        }
-        if (_rightBAction.WasPressedThisFrame())
-        {
-            ros.Publish(rightBButtonEventTopicName, new EmptyMsg());
-        }
-        if (_rightMenuAction.WasPressedThisFrame())
-        {
-            ros.Publish(rightMenuButtonEventTopicName, new EmptyMsg());
+            if (_startDemoAudioData != null) _startDemoAudioData.Play(0);
         }
 
-        // if (_clutchAction.WasPressedThisFrame())
-        // {
-        //     SetPoseFromTransform(rightController.transform, ref _clutchTransformRight);
-        //     SetPoseFromTransform(leftController.transform, ref _clutchTransformLeft);
-        // }
+        if (_stopDemoAction != null && _stopDemoAction.WasPressedThisFrame())
+        {
+            if (_stopDemoAudioData != null) _stopDemoAudioData.Play(0);
+        }
 
-        // if (_clutchAction.IsPressed())
-        // {
-        //     // We want to know the difference between the current transform and the clutch transform in the world frame
-        //     InvertTransform(_clutchTransformRight, ref _tmpTransformInverted);
-        //     SetPoseFromTransform(rightController.transform, ref _tmpTransform);
-        //     DoTransform(_tmpTransformInverted, _tmpTransform, out _currentDiffTransformRight);
+        PublishEventIfPressed(_leftGripAction, leftGripButtonEventTopicName);
+        PublishEventIfPressed(_leftTriggerAction, leftTriggerButtonEventTopicName);
+        PublishEventIfPressed(_leftAAction, leftAButtonEventTopicName);
+        PublishEventIfPressed(_leftBAction, leftBButtonEventTopicName);
+        PublishEventIfPressed(_leftMenuAction, leftMenuButtonEventTopicName);
+        PublishEventIfPressed(_rightGripAction, rightGripButtonEventTopicName);
+        PublishEventIfPressed(_rightTriggerAction, rightTriggerButtonEventTopicName);
+        PublishEventIfPressed(_rightAAction, rightAButtonEventTopicName);
+        PublishEventIfPressed(_rightBAction, rightBButtonEventTopicName);
+        PublishEventIfPressed(_rightMenuAction, rightMenuButtonEventTopicName);
 
-        //     InvertTransform(_clutchTransformLeft, ref _tmpTransformInverted);
-        //     SetPoseFromTransform(leftController.transform, ref _tmpTransform);
-            // DoTransform(_tmpTransformInverted, _tmpTransform, out _currentDiffTransformLeft);
-        // }
-
-        // if (_clutchAction.WasReleasedThisFrame())
-        // {
-        //     DoTransformDiff(_currentTransformRight, _currentDiffTransformRight, _clutchTransformRight,
-        //         ref _tmpTransform);
-        //     _currentTransformRight.position = _tmpTransform.position;
-        //     _currentTransformRight.rotation = _tmpTransform.rotation;
-        //     _currentDiffTransformRight.position.Set(0, 0, 0);
-        //     _currentDiffTransformRight.rotation.Set(0, 0, 0, 1.0f);
-        // }
-
-
-        // State updates
+        // State updates: publish odom/TF and all bool button states at odomPublishFrequency.
+        // Subtract the threshold instead of resetting to 0 so the actual rate tracks the
+        // configured frequency rather than the frame rate.
         _timeElapsed += Time.deltaTime;
-        if (_timeElapsed > odomPublishFrequency)
+        if (_timeElapsed >= odomPublishFrequency)
         {
-            _timeElapsed = 0;
+            _timeElapsed -= odomPublishFrequency;
 
             PublishOdomAndTf(leftController.transform, leftChildFrame, leftOdomTopicName);
             PublishOdomAndTf(rightController.transform, rightChildFrame, rightOdomTopicName);
 
-            ros.Publish(leftGripButtonStateTopicName, new BoolMsg(_leftGripAction.IsPressed()));
-            ros.Publish(leftTriggerButtonStateTopicName, new BoolMsg(_leftTriggerAction.IsPressed()));
-            ros.Publish(leftAButtonStateTopicName, new BoolMsg(_leftAAction.IsPressed()));
-            ros.Publish(leftBButtonStateTopicName, new BoolMsg(_leftBAction.IsPressed()));
-            ros.Publish(leftMenuButtonStateTopicName, new BoolMsg(_leftMenuAction.IsPressed()));
+            PublishBoolState(_leftGripAction, leftGripButtonStateTopicName);
+            PublishBoolState(_leftTriggerAction, leftTriggerButtonStateTopicName);
+            PublishBoolState(_leftAAction, leftAButtonStateTopicName);
+            PublishBoolState(_leftBAction, leftBButtonStateTopicName);
+            PublishBoolState(_leftMenuAction, leftMenuButtonStateTopicName);
 
-
-            ros.Publish(rightGripButtonStateTopicName, new BoolMsg(_rightGripAction.IsPressed()));
-            ros.Publish(rightTriggerButtonStateTopicName, new BoolMsg(_rightTriggerAction.IsPressed()));
-            ros.Publish(rightAButtonStateTopicName, new BoolMsg(_rightAAction.IsPressed()));
-            ros.Publish(rightBButtonStateTopicName, new BoolMsg(_rightBAction.IsPressed()));
-            ros.Publish(rightMenuButtonStateTopicName, new BoolMsg(_rightMenuAction.IsPressed()));
-        
+            PublishBoolState(_rightGripAction, rightGripButtonStateTopicName);
+            PublishBoolState(_rightTriggerAction, rightTriggerButtonStateTopicName);
+            PublishBoolState(_rightAAction, rightAButtonStateTopicName);
+            PublishBoolState(_rightBAction, rightBButtonStateTopicName);
+            PublishBoolState(_rightMenuAction, rightMenuButtonStateTopicName);
         }
-        
+    }
+
+    private void PublishEventIfPressed(InputAction action, string topic)
+    {
+        if (action != null && action.WasPressedThisFrame())
+        {
+            ros.Publish(topic, new EmptyMsg());
+        }
+    }
+
+    private void PublishBoolState(InputAction action, string topic)
+    {
+        if (action != null)
+        {
+            ros.Publish(topic, new BoolMsg(action.IsPressed()));
+        }
     }
     
     void OnGUI()
     {
-        if (_keyboard != null)
+        if (_keyboard != null && textInput != null)
         {
             textInput.text = _keyboard.text;
         }
@@ -350,79 +378,41 @@ public class RosPublishers : MonoBehaviour
             nanosec = (uint)(totalNanoseconds % 1_000_000_000)
         };
     }
-    // private void PublishOdomAndTf(Transform transformValue, ref Pose pose)
-    // {
-    //     Pose pose = new Pose();
-    //     transformValue.GetPositionAndRotation(pose.position, pose.rotation);
-    private void PublishOdomAndTf(Transform transform, string childFrame, string odomTopicName)
+    private void PublishOdomAndTf(Transform sourceTransform, string childFrame, string odomTopicName)
     {
-    // // Convert position and rotation using ROSGeometry
-    // DoTransformDiff(_currentTransformRight, _currentDiffTransformRight, _clutchTransformRight, ref _tmpTransform);
-        
-        Pose tempPose = new Pose();
-        // Transform transform = rightController.transform;
-        transform.GetPositionAndRotation(out tempPose.position, out tempPose.rotation);
-        
+        Pose tempPose;
+        sourceTransform.GetPositionAndRotation(out tempPose.position, out tempPose.rotation);
+
         Vector3<FLU> rosPosition = CoordinateSpaceExtensions.To<FLU>(tempPose.position);
         Quaternion<FLU> rosRotation = CoordinateSpaceExtensions.To<FLU>(tempPose.rotation);
 
-        // Create header
-        HeaderMsg header = new HeaderMsg
-        {
-            frame_id = "quest",
-            stamp = GetRosTime()
-        };
+        // Mutate the reusable instances in place. ros_tcp_endpoint serializes synchronously
+        // inside Publish(), so reusing the same objects across publish calls is safe.
+        // The published pose is in standard REP-103 FLU (X=forward, Y=left, Z=up). Consumers
+        // with different conventions (e.g. MoveIt Pro IMarker EE convention) are expected to
+        // apply their own change-of-basis on the host side.
+        _odomHeader.stamp = GetRosTime();
 
-        var pose = new PoseWithCovarianceMsg
-        {
-            pose = new PoseMsg
-            {
-                position = rosPosition.To<FLU>(),
-                orientation = rosRotation.To<FLU>()
-            }
-        };
-        var twist = new TwistWithCovarianceMsg
-        {
-            twist = new TwistMsg
-            {
-                linear = new Vector3Msg(0, 0, 0), // Assuming no linear velocity for simplicity
-                angular = new Vector3Msg(0, 0, 0) // Assuming no angular velocity for simplicity
-            }
-        };
+        _odomPosePoint.x = rosPosition.x;
+        _odomPosePoint.y = rosPosition.y;
+        _odomPosePoint.z = rosPosition.z;
+        _odomPoseQuat.x = rosRotation.x;
+        _odomPoseQuat.y = rosRotation.y;
+        _odomPoseQuat.z = rosRotation.z;
+        _odomPoseQuat.w = rosRotation.w;
 
-        var odometryMsg = new OdometryMsg()
-        {
-            header = header,
-            child_frame_id = childFrame,
-            pose = pose,
-            twist = twist
-        };
+        _odomMsg.child_frame_id = childFrame;
+        ros.Publish(odomTopicName, _odomMsg);
 
-        //Publish the message
-        ros.Publish(odomTopicName, odometryMsg);
+        _tfTranslation.x = rosPosition.x;
+        _tfTranslation.y = rosPosition.y;
+        _tfTranslation.z = rosPosition.z;
+        _tfRotation.x = rosRotation.x;
+        _tfRotation.y = rosRotation.y;
+        _tfRotation.z = rosRotation.z;
+        _tfRotation.w = rosRotation.w;
 
-
-        // Create transform
-        var transformMsg = new TransformMsg
-        {
-            translation = rosPosition.To<FLU>(),
-            rotation = rosRotation.To<FLU>()
-        };
-
-        // Create transform stamped
-        var transformStamped = new TransformStampedMsg
-        {
-            header = header,
-            child_frame_id = childFrame,
-            transform = transformMsg
-        };
-
-        // Wrap in TFMessage
-        var transforms = new[] { transformStamped };
-        var tfMessage = new TFMessageMsg(transforms);
-
-        // Publish the message
-        ros.Publish(tfTopicName, tfMessage);
-        ros.Publish("/tf_test", tfMessage);
+        _tfStamped.child_frame_id = childFrame;
+        ros.Publish(tfTopicName, _tfMessage);
     }
 }

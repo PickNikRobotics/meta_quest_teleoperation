@@ -3,6 +3,10 @@
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
     <uses-feature android:name="oculus.software.overlay_keyboard" android:required="true" />
+    <uses-feature android:name="oculus.software.eye_tracking" tools:node="remove" />
+    <uses-permission android:name="com.oculus.permission.EYE_TRACKING" tools:node="remove" />
+    <uses-feature android:name="oculus.software.handtracking" tools:node="remove" />
+    <uses-permission android:name="com.oculus.permission.HAND_TRACKING" tools:node="remove" />
     <application>
        <!--Used when Application Entry is set to GameActivity, otherwise remove this activity block-->
         <activity android:name="com.unity3d.player.UnityPlayerGameActivity"

@@ -29,13 +29,26 @@ Continuous polling of `IsPressed()` for each button. Use these when you need to 
 Same five buttons × two controllers, with `_button_state` instead of `_button_event` (e.g. `/right_grip_button_state`).
 
 ### Controller pose — `nav_msgs/Odometry`, polled at 60 Hz
-- `/right_controller_odom` — right controller pose in the `quest` frame, child `right_controller_odom`
-- `/left_controller_odom` — left controller pose in the `quest` frame, child `left_controller_odom`
+- `/right_controller_odom` — right controller pose in the `headset` frame, child `right_controller_odom`
+- `/left_controller_odom` — left controller pose in the `headset` frame, child `left_controller_odom`
 
-The twist field is zero (only pose is reported).
+Pose is relative to the current headset transform (`RosPublishers.headTransform` in the
+Inspector, normally the XR rig's Main Camera) rather than Quest's boot/recenter-time tracking
+origin, so it stays valid regardless of where the operator physically stands or whether they've
+recentered. The twist field is zero (only pose is reported).
 
 ### TF — `tf2_msgs/TFMessage`, polled at 60 Hz
-- `/tf` — both controllers as `quest → {left,right}_controller_odom` transforms
+- `/tf` — both controllers as `headset → {left,right}_controller_odom` transforms
+
+### Joystick — `geometry_msgs/Vector3`, polled at 60 Hz
+- `/left_joystick` — left thumbstick, `x=horizontal`, `y=vertical`, `z=0`
+- `/right_joystick` — right thumbstick, `x=horizontal`, `y=vertical`, `z=0`
+
+Thumbstick button/touch topics:
+
+- `/left_joystick_click_event`, `/right_joystick_click_event` — `std_msgs/Empty`, fires on click
+- `/left_joystick_click_state`, `/right_joystick_click_state` — `std_msgs/Bool`
+- `/left_joystick_touch_state`, `/right_joystick_touch_state` — `std_msgs/Bool`
 
 ## Special-purpose buttons
 
